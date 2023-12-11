@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.Data.SqlClient;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -13,11 +14,16 @@ namespace DuAn1
 {
     public partial class QL_ThucDon : UserControl
     {
-        public QL_ThucDon()
+        private Main main;
+        public QL_ThucDon(Main main)
         {
             InitializeComponent();
+            LoadData();
+            LoadAnh();
+            this.main = main;
         }
         public const string connectionString = "Data Source=TUNZZ;Initial Catalog=QLCaffe_Sach;Integrated Security=True";
+        public string directoryPath = @"C:\Users\ductu\Downloads\DuAn1\DuAn1\Resources\Img_Mon";
         public DataTable LoadData()
         {
             DataTable booksTable = new DataTable();
@@ -40,8 +46,17 @@ namespace DuAn1
                 Xoa = true;
                 themloai = true;
             }
-
+           
             return booksTable;
+        }
+        public void LoadAnh ()
+        {
+            string[] imageFiles = Directory.GetFiles(directoryPath, "*.png");
+            foreach (string filePath in imageFiles)
+            {
+                string fileName = Path.GetFileName(filePath);
+                cbbHinhAnh.Items.Add(fileName);
+            }
         }
 
         private void ThemMonVaoThucDon(string maMon, string tenMon, int soLuong, int donGiaNhap, int donGiaBan, DateTime ngayNhap, string hinhAnh, string moTa, string ghiChu, string maNv, string maLoaiMon)
@@ -176,7 +191,7 @@ namespace DuAn1
             {
 
             }
-            DialogResult result = MessageBox.Show("Bạn có chắc chắn muốn xóa khách hàng này?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
+            DialogResult result = MessageBox.Show("Bạn có chắc chắn muốn xóa món này?", "Xác nhận xóa", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
 
             if (result == DialogResult.Yes)
             {
@@ -312,7 +327,7 @@ namespace DuAn1
             txtDonGiaBan.Enabled = false;
             txtDonGiaNhap.Enabled = false;
             txtGhiChu.Enabled = false;
-            txtHinh.Enabled = false;
+           cbbHinhAnh.Enabled = false;
             txtMaMon.Enabled = false;
             txtMoTa.Enabled = false;
             txtSoLuong.Enabled = false;
@@ -321,7 +336,7 @@ namespace DuAn1
             cbbLoai.Enabled = false;
             btnXoa.Enabled = false;
             btnSua.Enabled = false;
-            btLuu.Enabled = false;
+            btnLuu.Enabled = false;
             txtTenLoai.Visible = false;
             btThemLoai.Enabled = false;
 
@@ -332,27 +347,23 @@ namespace DuAn1
             txtDonGiaBan.Text = "";
             txtDonGiaNhap.Text = "";
             txtGhiChu.Text = "";
-            txtHinh.Text = "";
+           cbbHinhAnh.Text = "";
             txtMaMon.Text = "";
             txtMoTa.Text = "";
             txtSoLuong.Text = "";
             txtTenMon.Text = "";
             dtNgayNhap.Text = "";
-
-
-
         }
         public void MoKhoa()
         {
             txtDonGiaBan.Enabled = true;
             txtDonGiaNhap.Enabled = true;
             txtGhiChu.Enabled = true;
-            txtHinh.Enabled = true;
+           cbbHinhAnh.Enabled = true;
             txtMaMon.Enabled = true;
             txtMoTa.Enabled = true;
             txtSoLuong.Enabled = true;
             txtTenMon.Enabled = true;
-            dtNgayNhap.Enabled = true;
             cbbLoai.Enabled = true;
         }
 
@@ -361,7 +372,40 @@ namespace DuAn1
             LoadData();
             Khoa();
         }
+        private string GenerateUniqueMaMon()
+        {
+            string newMaMon = "MM001";
 
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                while (true)
+                {
+                    SqlCommand command = new SqlCommand("SELECT COUNT(*) FROM ThucDon WHERE MaMon = @MaMon", connection);
+                    command.Parameters.AddWithValue("@MaMon", newMaMon);
+                    int count = (int)command.ExecuteScalar();
+
+                    if (count > 0)
+                    {
+                        newMaMon = GenerateRandomMaMon();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return newMaMon;
+        }
+
+        private string GenerateRandomMaMon()
+        {
+            Random random = new Random();
+            string chars = "0123456789";
+            return "MM" + new string(Enumerable.Repeat(chars, 3).Select(s => s[random.Next(s.Length)]).ToArray());
+        }
         private void btnThem_Click(object sender, EventArgs e)
         {
             LoadData();
@@ -370,14 +414,15 @@ namespace DuAn1
             ThemMoi = true;
             Xoa = false;
             btnXoa.Enabled = true;
-            btLuu.Enabled = true;
+            btnLuu.Enabled = true;
+            txtMaMon.Text = GenerateUniqueMaMon();
         }
 
         private void btnSua_Click(object sender, EventArgs e)
         {
             MoKhoa();
             ThemMoi = false;
-            btLuu.Enabled = true;
+            btnLuu.Enabled = true;
         }
 
         private void btnXoa_Click(object sender, EventArgs e)
@@ -391,10 +436,21 @@ namespace DuAn1
                 LoadData();
             }
         }
-
+        bool KiemTraSo(string input)
+        {
+            foreach (char c in input)
+            {
+                if (!char.IsDigit(c))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
         private void btLuu_Click(object sender, EventArgs e)
         {
             string maloai = LayMaLoaiSachTuLoaiSach(cbbLoai.Text);
+            string Manv =main.MaDn;
             if (themloai == false)
             {
                 if (string.IsNullOrWhiteSpace(txtTenLoai.Text))
@@ -407,17 +463,35 @@ namespace DuAn1
                 }
 
             }
-            else if (string.IsNullOrWhiteSpace(txtMaMon.Text))
+            else if (string.IsNullOrWhiteSpace(txtMaMon.Text) ||
+               string.IsNullOrWhiteSpace(txtDonGiaBan.Text) ||
+               string.IsNullOrWhiteSpace(txtDonGiaNhap.Text) ||
+               string.IsNullOrWhiteSpace(txtTenMon.Text) ||
+               string.IsNullOrWhiteSpace(txtSoLuong.Text))
             {
                 MessageBox.Show("Vui lòng điền đầy đủ thông tin vào tất cả các ô văn bản.");
             }
+            else if (!KiemTraSo(txtSoLuong.Text))
+            {
+                MessageBox.Show("Số lượng không hợp lê.");
+            }
+            else if (!KiemTraSo(txtDonGiaBan.Text))
+            {
+                MessageBox.Show("Đơn giá bán không hợp lê.");
+            }
+            else if (!KiemTraSo(txtDonGiaNhap.Text))
+            {
+                MessageBox.Show("Đơn giá nhập không hợp lê.");
+            }
             else if (ThemMoi)
             {
-                ThemMonVaoThucDon(txtMaMon.Text, txtTenMon.Text, Convert.ToInt32(txtSoLuong.Text), Convert.ToInt32(txtDonGiaNhap.Text), Convert.ToInt32(txtDonGiaBan.Text), DateTime.Now, txtHinh.Text, txtMoTa.Text, txtGhiChu.Text, "0001", maloai);
+                ThemMonVaoThucDon(txtMaMon.Text, txtTenMon.Text, Convert.ToInt32(txtSoLuong.Text), Convert.ToInt32(txtDonGiaNhap.Text), Convert.ToInt32(txtDonGiaBan.Text), DateTime.Now, cbbHinhAnh.Text, txtMoTa.Text, txtGhiChu.Text, Manv, maloai);
+                LoadData();
             }
             else if (ThemMoi == false)
             {
-                CapNhatMonTrongThucDon(txtMaMon.Text, txtTenMon.Text, Convert.ToInt32(txtSoLuong.Text), Convert.ToInt32(txtDonGiaNhap.Text), Convert.ToInt32(txtDonGiaBan.Text), DateTime.Now, txtHinh.Text, txtMoTa.Text, txtGhiChu.Text, "0001", maloai);
+                CapNhatMonTrongThucDon(txtMaMon.Text, txtTenMon.Text, Convert.ToInt32(txtSoLuong.Text), Convert.ToInt32(txtDonGiaNhap.Text), Convert.ToInt32(txtDonGiaBan.Text), DateTime.Now,cbbHinhAnh.Text, txtMoTa.Text, txtGhiChu.Text, Manv, maloai);
+                LoadData();
             }
 
         }
@@ -442,16 +516,18 @@ namespace DuAn1
             if (e.RowIndex >= 0)
             {
                 DataGridViewRow row = dgvThucDon.Rows[e.RowIndex];
-                txtMaMon.Text = row.Cells["MaSach"].Value?.ToString();
+                txtMaMon.Text = row.Cells["MaMon"].Value?.ToString();
                 txtSoLuong.Text = row.Cells["SoLuong"].Value?.ToString();
                 txtDonGiaNhap.Text = row.Cells["DonGiaNhap"].Value?.ToString();
                 txtDonGiaBan.Text = row.Cells["DonGiaBan"].Value?.ToString();
                 dtNgayNhap.Value = Convert.ToDateTime(row.Cells["NgayNhap"].Value);
-                txtHinh.Text = row.Cells["HinhAnh"].Value?.ToString();
+               cbbHinhAnh.Text = row.Cells["HinhAnh"].Value?.ToString();
                 txtMoTa.Text = row.Cells["MoTa"].Value?.ToString();
                 txtGhiChu.Text = row.Cells["GhiChu"].Value?.ToString();
-                LoadDataToComboBox(row.Cells["MaLoai"].Value?.ToString());
-                txtTenMon.Text = row.Cells["TenSach"].Value?.ToString();
+                LoadDataToComboBox(row.Cells["MaLoaiMon"].Value?.ToString());
+                txtTenMon.Text = row.Cells["TenMon"].Value?.ToString();
+                string selectedFileName = cbbHinhAnh.SelectedItem.ToString();
+                pcbSanPham.Image = Image.FromFile(Path.Combine(directoryPath, selectedFileName));
             }
         }
 
@@ -460,9 +536,14 @@ namespace DuAn1
             themloai = false;
             txtTenLoai.Visible = true;
             btnXoa.Enabled = true;
-            btLuu.Enabled = true;
+            btnLuu.Enabled = true;
         }
 
-        
+        private void cbbHinhAnh_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            string selectedFileName = cbbHinhAnh.SelectedItem.ToString();
+            pcbSanPham.Image = Image.FromFile(Path.Combine(directoryPath, selectedFileName));
+        }
+
     }
 }

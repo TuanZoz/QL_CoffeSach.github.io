@@ -6,6 +6,7 @@ using System.Data.SqlClient;
 using System.Drawing;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.Windows.Forms.VisualStyles;
@@ -66,7 +67,6 @@ namespace DuAn1
 
                     cmd.ExecuteNonQuery();
                     MessageBox.Show("Thêm khách hàng thành công!");
-                    DangKy dangKy = new DangKy();
                     Khoa();
                     LoadData();
                 }
@@ -97,7 +97,6 @@ namespace DuAn1
 
                     cmd.ExecuteNonQuery();
                     MessageBox.Show("Cập nhật thành công!");
-                    DangKy dangKy = new DangKy();
                     Khoa();
                     LoadData();
                 }
@@ -126,7 +125,6 @@ namespace DuAn1
 
                         cmd.ExecuteNonQuery();
                         MessageBox.Show("Xóa thành công!");
-                        DangKy dangKy = new DangKy();
                         Khoa();
                         LoadData();
 
@@ -174,53 +172,14 @@ namespace DuAn1
             ThemMoi = true;
             Xoa = false;
             btnXoa.Enabled = true;
+           txtMakh.Text= GenerateUniqueMaKhachHang();
         }
 
         private void btnSua_Click(object sender, EventArgs e)
         {
+            
             MoKhoa();
             ThemMoi = false;
-        }
-
-        private void btnXoa_Click(object sender, EventArgs e)
-        {
-            if (Xoa)
-            {
-                XoaKhachHang(txtMakh.Text);
-            }
-            else
-            {
-                txtMakh.Text = "";
-                txtTenKH.Text = "";
-                txtEmail.Text = "";
-                txtDiaChi.Text = "";
-                txtSDT.Text = "";
-            }
-        }
-        private void btnTK_Click(object sender, EventArgs e)
-        {
-            using (SqlConnection connection = new SqlConnection(connectionString))
-            {
-                try
-                {
-                    connection.Open();
-
-                    SqlCommand cmd = new SqlCommand("timKiemKH", connection);
-                    cmd.CommandType = CommandType.StoredProcedure;
-
-                    cmd.Parameters.AddWithValue("@Tukhoa", txtTK.Text);
-
-                    SqlDataAdapter adapter = new SqlDataAdapter(cmd);
-                    DataTable dataTable = new DataTable();
-                    adapter.Fill(dataTable);
-
-                    DgvKhachHang.DataSource = dataTable;
-                }
-                catch (Exception ex)
-                {
-                    MessageBox.Show("Đã xảy ra lỗi : " + ex.Message);
-                }
-            }
         }
 
         private void DgvKhachHang_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -248,16 +207,127 @@ namespace DuAn1
                 }
             }
         }
+        private string GenerateUniqueMaKhachHang()
+        {
+            string newMaKhachHang = "KH001";
 
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                while (true)
+                {
+                    SqlCommand command = new SqlCommand("SELECT COUNT(*) FROM KhachHang WHERE MaKh = @MaKhachHang", connection);
+                    command.Parameters.AddWithValue("@MaKhachHang", newMaKhachHang);
+                    int count = (int)command.ExecuteScalar();
+
+                    if (count > 0)
+                    {
+                        newMaKhachHang = GenerateRandomMaKhachHang();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return newMaKhachHang;
+        }
+
+        private string GenerateRandomMaKhachHang()
+        {
+            Random random = new Random();
+            string chars = "0123456789";
+            return "KH" + new string(Enumerable.Repeat(chars, 3).Select(s => s[random.Next(s.Length)]).ToArray());
+        }
+        static bool IsValidEmail(string email)
+        {
+            try
+            {
+                string pattern = @"^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\.[a-zA-Z0-9-.]+$";
+                return Regex.IsMatch(email, pattern);
+            }
+            catch (RegexMatchTimeoutException)
+            {
+                return false;
+            }
+        }
+        public bool KiemTraEmailVaSDt(string email, string sdt,string ma)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                using (SqlCommand command = new SqlCommand("EmailPhoneExistKh", connection))
+                {
+                    bool kt = false;
+                    command.CommandType = CommandType.StoredProcedure;
+                    command.Parameters.AddWithValue("@Email", email);
+                    command.Parameters.AddWithValue("@PhoneNumber", sdt);
+                    command.Parameters.AddWithValue("@MaKH", ma);
+                    connection.Open();
+
+                    using (SqlDataReader reader = command.ExecuteReader())
+                    {
+                        while (reader.Read())
+                        {
+                            string result = reader["Result"].ToString();
+                            if (result != "null")
+                            {
+                                MessageBox.Show(result, "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                                kt = true;
+                            }
+                        }
+                    }
+                    return kt;
+                }
+            }
+        }
+        bool KiemTraSo(string input)
+        {
+            foreach (char c in input)
+            {
+                if (!char.IsDigit(c))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
         private void btnLuu_Click(object sender, EventArgs e)
         {
+            DateTime ngayHienTai = DateTime.Now;
+            DateTime ngayDuocChon = dtNgaySinh.Value;
+
             if (string.IsNullOrWhiteSpace(txtTenKH.Text) ||
                 string.IsNullOrWhiteSpace(txtEmail.Text) ||
                 string.IsNullOrWhiteSpace(txtDiaChi.Text) ||
-                string.IsNullOrWhiteSpace(txtSDT.Text) ||
-                string.IsNullOrWhiteSpace(txtMakh.Text))
+                string.IsNullOrWhiteSpace(txtSDT.Text) 
+                )
             {
-                MessageBox.Show("Vui lòng điền đầy đủ thông tin vào tất cả các ô văn bản.");
+                MessageBox.Show("Vui lòng điền đầy đủ thông tin vào tất cả các ô thông tin.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else if (KiemTraEmailVaSDt(txtEmail.Text, txtSDT.Text,txtMakh.Text))
+            {
+            }
+            else if (rbNam.Checked == false && rbNu.Checked == false)
+            {
+                MessageBox.Show("Vui lòng chọn giới tính phù hợp.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else if (!IsValidEmail(txtEmail.Text))
+            {
+                MessageBox.Show("Email không hợp lệ.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else if (!KiemTraSo(txtSDT.Text))
+            {
+                MessageBox.Show("Số điện thoại chỉ được chứa số, không chứa chữ cái hoặc ký tự đặc biệt.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else if (txtSDT.Text.Length != 10 || !txtSDT.Text.StartsWith("0"))
+            {
+                MessageBox.Show("Số điện thoại không hợp lệ.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            }
+            else if (ngayDuocChon >= ngayHienTai)
+            {
+                MessageBox.Show("Ngày sinhh không hợp lệ.", "Thông báo", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             else if (ThemMoi)
             {
@@ -279,7 +349,44 @@ namespace DuAn1
             }
         }
 
-      
+        private void btnTK_Click(object sender, EventArgs e)
+        {
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                try
+                {
+                    connection.Open();
+
+                    SqlCommand cmd = new SqlCommand("timKiemKH", connection);
+                    cmd.CommandType = CommandType.StoredProcedure;
+
+                    cmd.Parameters.AddWithValue("@Tukhoa", txtTK.Text);
+
+                    SqlDataAdapter adapter = new SqlDataAdapter(cmd);
+                    DataTable dataTable = new DataTable();
+                    adapter.Fill(dataTable);
+                    if (dataTable == null)
+                    {
+                        MessageBox.Show("Không có khách hàng với thông tin cần tìm ");
+                    }
+                    else
+                    {
+                        DgvKhachHang.DataSource = dataTable;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show("Đã xảy ra lỗi : " + ex.Message);
+                }
+            }
+        }
+
+        private void btnXoa_Click(object sender, EventArgs e)
+        {
+            XoaKhachHang(txtMakh.Text);
+        }
+
+       
     }
         
 }

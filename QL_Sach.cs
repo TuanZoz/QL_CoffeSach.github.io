@@ -4,23 +4,27 @@ using System.ComponentModel;
 using System.Data;
 using System.Data.SqlClient;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.ListView;
 
 namespace DuAn1
 {
     public partial class QL_Sach : UserControl
     {
-        public QL_Sach()
+        private Main main;
+        public QL_Sach(Main mainForm)
         {
             InitializeComponent();
-           
+            main = mainForm;
         }
         public const string connectionString = "Data Source=TUNZZ;Initial Catalog=QLCaffe_Sach;Integrated Security=True";
+        public string directoryPath = @"C:\Users\ductu\Downloads\DuAn1\DuAn1\Resources\Img_Sp";
         public DataTable LoadData()
         {
             DataTable booksTable = new DataTable();
@@ -43,7 +47,14 @@ namespace DuAn1
                 Xoa = true;
                 themloaiSach = true;
             }
+            
 
+            string[] imageFiles = Directory.GetFiles(directoryPath, "*.png"); 
+            foreach (string filePath in imageFiles)
+            {
+                string fileName = Path.GetFileName(filePath);
+                cbbHinhAnh.Items.Add(fileName);
+            }
             return booksTable;
         }
 
@@ -323,7 +334,6 @@ namespace DuAn1
             txtDonGiaBan.Enabled = false;
             txtDonGiaNhap.Enabled = false;
             txtGhiChu.Enabled = false;
-            txtHinh.Enabled = false;
             txtMaSach.Enabled = false;
             txtMoTa.Enabled = false;
             txtSoLuong.Enabled = false;
@@ -334,7 +344,7 @@ namespace DuAn1
             cbbLoaiSach.Enabled = false;
             btnXoa.Enabled = false;
             btnSua.Enabled = false;
-            btLuu.Enabled = false;
+            btnLuu.Enabled = false;
             txtTenLoaiSach.Visible = false;
             btThemLoaiSach.Enabled=false;
 
@@ -345,7 +355,6 @@ namespace DuAn1
             txtDonGiaBan.Text = "";
             txtDonGiaNhap.Text = "";
             txtGhiChu.Text = "";
-            txtHinh.Text = "";
             txtMaSach.Text = "";
             txtMoTa.Text = "";
             txtSoLuong.Text = "";
@@ -362,13 +371,11 @@ namespace DuAn1
             txtDonGiaBan.Enabled = true;
             txtDonGiaNhap.Enabled = true;
             txtGhiChu.Enabled = true;
-            txtHinh.Enabled = true;
             txtMaSach.Enabled = true;
             txtMoTa.Enabled = true;
             txtSoLuong.Enabled = true;
             txtTacGia.Enabled = true;
             txtTenSach.Enabled = true;
-            dtNgayNhap.Enabled = true;
             txtNamXB.Enabled = true;
             cbbLoaiSach.Enabled=true;
         }
@@ -378,7 +385,40 @@ namespace DuAn1
            LoadData();
             Khoa();
         }
+        private string GenerateUniqueMaSach()
+        {
+            string newMaSach = "MS001";
 
+            using (SqlConnection connection = new SqlConnection(connectionString))
+            {
+                connection.Open();
+
+                while (true)
+                {
+                    SqlCommand command = new SqlCommand("SELECT COUNT(*) FROM Sach WHERE MaSach = @MaSach", connection);
+                    command.Parameters.AddWithValue("@MaSach", newMaSach);
+                    int count = (int)command.ExecuteScalar();
+
+                    if (count > 0)
+                    {
+                        newMaSach = GenerateRandomMaSach();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+            }
+
+            return newMaSach;
+        }
+
+        private string GenerateRandomMaSach()
+        {
+            Random random = new Random();
+            string chars = "0123456789";
+            return "MS" + new string(Enumerable.Repeat(chars, 3).Select(s => s[random.Next(s.Length)]).ToArray());
+        }
         private void btnThem_Click(object sender, EventArgs e)
         {
             LoadData();
@@ -387,14 +427,15 @@ namespace DuAn1
             ThemMoi = true;
             Xoa = false;
             btnXoa.Enabled = true;
-            btLuu.Enabled = true;
+            btnLuu.Enabled = true;
+            txtMaSach.Text = GenerateUniqueMaSach();
         }
 
         private void btnSua_Click(object sender, EventArgs e)
         {
             MoKhoa();
             ThemMoi = false;
-            btLuu.Enabled = true;
+            btnLuu.Enabled = true;
         }
 
         private void btnXoa_Click(object sender, EventArgs e)
@@ -408,11 +449,22 @@ namespace DuAn1
                 LoadData();
             }
         }
-
+        bool KiemTraSo(string input)
+        {
+            foreach (char c in input)
+            {
+                if (!char.IsDigit(c))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
         private void btLuu_Click(object sender, EventArgs e)
         {
             string maloai = LayMaLoaiSachTuLoaiSach(cbbLoaiSach.Text);
-            if(themloaiSach==false)
+            string manv = main.MaDn;
+            if (themloaiSach==false)
             {
                 if (string.IsNullOrWhiteSpace(txtTenLoaiSach.Text))
                 {
@@ -424,17 +476,37 @@ namespace DuAn1
                 }
 
             }
-            else if (string.IsNullOrWhiteSpace(txtMaSach.Text))
+            else if (string.IsNullOrWhiteSpace(txtMaSach.Text)||
+                string.IsNullOrWhiteSpace(txtDonGiaBan.Text) ||
+                string.IsNullOrWhiteSpace(txtDonGiaNhap.Text) ||
+                string.IsNullOrWhiteSpace(txtNamXB.Text) ||
+                string.IsNullOrWhiteSpace(txtTacGia.Text) ||
+                string.IsNullOrWhiteSpace(txtTenSach.Text) ||
+                string.IsNullOrWhiteSpace(txtSoLuong.Text))
             {
                 MessageBox.Show("Vui lòng điền đầy đủ thông tin vào tất cả các ô văn bản.");
             }
+            else if (!KiemTraSo(txtSoLuong.Text))
+            {
+                MessageBox.Show("Số lượng không hợp lê.");
+            }
+            else if (!KiemTraSo(txtDonGiaBan.Text))
+            {
+                MessageBox.Show("Đơn giá bán không hợp lê.");
+            }
+            else if (!KiemTraSo(txtDonGiaNhap.Text))
+            {
+                MessageBox.Show("Đơn giá nhập không hợp lê.");
+            }
             else if (ThemMoi)
             {
-                ThemSach(txtMaSach.Text, Convert.ToInt32(txtSoLuong.Text), Convert.ToInt32(txtDonGiaNhap.Text), Convert.ToInt32(txtDonGiaBan.Text), Convert.ToDateTime(dtNgayNhap.Text), txtHinh.Text, Convert.ToInt32(txtNamXB.Text), txtTacGia.Text, txtMoTa.Text, txtGhiChu.Text, "0001", maloai, txtTenSach.Text);
+                ThemSach(txtMaSach.Text, Convert.ToInt32(txtSoLuong.Text), Convert.ToInt32(txtDonGiaNhap.Text), Convert.ToInt32(txtDonGiaBan.Text), Convert.ToDateTime(dtNgayNhap.Text), cbbHinhAnh.Text, Convert.ToInt32(txtNamXB.Text), txtTacGia.Text, txtMoTa.Text, txtGhiChu.Text, manv, maloai, txtTenSach.Text);
+                LoadData();
             }
             else if ( ThemMoi== false)
             {
-               CapNhatSach(txtMaSach.Text, Convert.ToInt32(txtSoLuong.Text), Convert.ToInt32(txtDonGiaNhap.Text), Convert.ToInt32(txtDonGiaBan.Text), Convert.ToDateTime(dtNgayNhap.Text), txtHinh.Text, Convert.ToInt32(txtNamXB.Text), txtTacGia.Text, txtMoTa.Text, txtGhiChu.Text, "0001", maloai, txtTenSach.Text);
+               CapNhatSach(txtMaSach.Text, Convert.ToInt32(txtSoLuong.Text), Convert.ToInt32(txtDonGiaNhap.Text), Convert.ToInt32(txtDonGiaBan.Text), Convert.ToDateTime(dtNgayNhap.Text), cbbHinhAnh.Text, Convert.ToInt32(txtNamXB.Text), txtTacGia.Text, txtMoTa.Text, txtGhiChu.Text, manv, maloai, txtTenSach.Text);
+                LoadData();
             }
             
         }
@@ -464,22 +536,42 @@ namespace DuAn1
                 txtDonGiaNhap.Text = row.Cells["DonGiaNhap"].Value?.ToString();
                 txtDonGiaBan.Text = row.Cells["DonGiaBan"].Value?.ToString();
                 dtNgayNhap.Value = Convert.ToDateTime(row.Cells["NgayNhap"].Value);
-                txtHinh.Text = row.Cells["HinhAnh"].Value?.ToString();
+                cbbHinhAnh.Text = row.Cells["HinhAnh"].Value?.ToString();
                 txtNamXB.Text = row.Cells["NamXuatBan"].Value?.ToString();
                 txtTacGia.Text = row.Cells["TacGia"].Value?.ToString();
                 txtMoTa.Text = row.Cells["MoTa"].Value?.ToString();
                 txtGhiChu.Text = row.Cells["GhiChu"].Value?.ToString();
                 LoadDataToComboBox(row.Cells["MaLoai"].Value?.ToString());
                 txtTenSach.Text = row.Cells["TenSach"].Value?.ToString();
+                string selectedFileName = cbbHinhAnh.SelectedItem.ToString();
+                pcbSanPham.Image = Image.FromFile(Path.Combine(directoryPath, selectedFileName));
             }
         }
 
         private void btThemLoaiSach_Click(object sender, EventArgs e)
         {
-            themloaiSach = false;
-            txtTenLoaiSach.Visible = true;
-            btnXoa.Enabled = true;
-            btLuu.Enabled = true;
+            if(txtTenLoaiSach.Visible)
+            {
+                themloaiSach = true;
+                txtTenLoaiSach.Visible = false;
+                btnXoa.Enabled = false;
+                btnLuu.Enabled = false;
+            }
+            else
+            {
+                themloaiSach = false;
+                txtTenLoaiSach.Visible = true;
+                btnXoa.Enabled = true;
+                btnLuu.Enabled = true;
+            }
         }
+
+        private void cbbHinhAnh_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            string selectedFileName = cbbHinhAnh.SelectedItem.ToString();
+            pcbSanPham.Image = Image.FromFile(Path.Combine(directoryPath, selectedFileName));
+        }
+
+      
     }
 }
